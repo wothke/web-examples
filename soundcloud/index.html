@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<!-- 
+This example shows use of my Soundcloud related utility functionalities.
+
+Copyright (C) 2017 Juergen Wothke
+
+Terms of Use: This software is licensed under a CC BY-NC-SA 
+(http://creativecommons.org/licenses/by-nc-sa/4.0/).
+-->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<title>soundcloud example</title>
+</head>
+
+<script src="jquery.js"></script>
+<script src="musiccloud.js"></script>
+
+<body>
+<div id="isloading"></div>
+<div id="sound-title"></div>
+<canvas id="waveformCanvas" width="500" height="50"></canvas>
+<audio id="player"><source id="mp3Source" type="audio/mp3"/></audio>
+
+<script>
+$(window).bind('load', function() {
+	// allows to analyze the frequency spectrum, e.g. for beat detection
+	var analyzers= new Analyzers();
+
+	// displays the "waveform" image supplied from Soundcloud
+	var waveformDisplay= new WaveformDisplay('#waveformCanvas');
+
+	// plays music selected via the # URL postfix (see usage example in above comment)
+
+	// NOTE: you need a Soundcloud client_id which you must put into your 
+	// proxy.php - without it you'll not be able to access any music
+	window.cloudPlayer= new CloudPlayer( {
+			player:		"#player",		// map GUI related stuff
+			source:		"#mp3Source",
+			loading: 	"#isloading",
+			title:		"#sound-title"
+		}, analyzers, waveformDisplay);
+
+	window.cloudPlayer.initMusic();
+});
+
+$(window).bind('hashchange', function() {
+	window.cloudPlayer.startMusic();	// restart with new song
+});
+</script>
+
+</body></html>

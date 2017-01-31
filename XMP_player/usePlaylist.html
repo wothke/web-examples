@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<!-- 
+This example implemetation is meant to ease use of my various ScriptNodePlayer 
+based chiptune emulators.
+
+	usage: 	copy this into some content folder of your webserver, then call 
+			http://[insert path info here]/usePlaylist.html?playlistURL=./playlist.txt&shuffle=true
+
+It might be useful to anyone trying to directly integrate the plain player/backend
+libs into his own web pages. (With their bells and whistles my regular example pages 
+may be a bit overwhelming as a respective starting point.)
+
+It shows how the generic ScriptNodePlayer can be configured for use with a specific 
+backend (in this case the one for XMP). 
+
+The code below tries to keep it simple (all in one file, no extra libs, no 
+fancy GUI, etc).
+
+Functionality wise it only provides the basics: "play", "pause", "volume".
+Due to popular demand it then shows one add-on feature, that is how a simple "playlist"
+functionality ("next", "previous", "shuffle") might be integrated with the player (see 
+separate PHP script in this folder for an example on how a respective playlist might 
+be automatically generated).
+
+There are certainly many improvements that could be made to this example implementation 
+and I have left "exercise .." comment where it might be educational to the reader.
+
+Advice: The one thing that might be most puzzling to beginners is the extensive use of 
+"callbacks" - whenever file operations are involved: You may be used to traditional PC 
+programming, where IO can be done synchronously (e.g. "load(filename)" returns when the
+file has been loaded). Within a web application such a "blocking wait" is a no-go, that's 
+why some "load(filename)" just takes the order but then directly returns even before 
+the data has been loaded. The concept is that you supply an additional "callback" function, e.g. 
+"load(filename, myCallbackFunc)" and eventough the "load" returns directly without 
+any data, you will know when the data is ready because the respective background loader 
+will then invoke your "myCallbackFunc". It helps if you get comfortable with that approach.
+
+
+Copyright (C) 2017 Juergen Wothke
+
+Terms of Use: This software is licensed under a CC BY-NC-SA 
+(http://creativecommons.org/licenses/by-nc-sa/4.0/).
+-->
+<html>
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="X-UA-Compatible" content="chrome=1" />
+
+<script type="text/javascript" src="scriptprocessor_player.min.js"></script>
+<script type="text/javascript" src="backend_xmp.js"></script>
+<script>
+var $ = document.querySelector.bind(document);
+
+
+function XMPPlayListPlayer(autoplay) {
+	this.idx= 0;
+	this.songs = [];
+	this.autoplay = autoplay;	// exercise 1: try to control this via another request param
+
+	// use request parameters to control some of the player behavior
+	this.isShuffleOn= (this.getURLParam("shuffle") === 'true');
+	this.playlistURL= this.getURLParam("playlistURL");
+
+	// fetch the specified playlist via AJAX (instead of implicitly starting this here within 
+	// the constructor the below could of course just as well be put into some separate "start" method..)
+	if (this.playlistURL !== null) {
+		var req = new XMLHttpRequest();
+		req.open('GET', this.playlistURL, true);
+		req.onreadystatechange = function (aEvt) {
+			if (req.readyState == 4) {
+				if(req.status == 200) {
+					this.songs= req.responseText.split("\n");	
+
+					// instanciate the player only *after* a playlist has been successfully loaded:
+
+					// Configure the player with the backend (e.g. the XMP emulator) that you want to use.
+					// (change this if you want play SID, PS, etc files) 
+					var basePath= '';			// not needed here
+					var enableSpectrum= false;	// not using it here
+					ScriptNodePlayer.createInstance(new XMPBackendAdapter(), basePath, [], enableSpectrum, this.doOnPlayerReady.bind(this),
+														this.doOnTrackReadyToPlay.bind(this), this.doOnTrackEnd.bind(this));
+			} else {
+					alert("Error loading playlist");
+				}
+			}
+		}.bind(this);
+		req.send(null);	
+	} else {
+		alert("Error no playlist specified");
+	}
+};
+
+XMPPlayListPlayer.prototype = {
+	// utility to get a named request parameter
+	getURLParam: function(name) {
+	   if(name=(new RegExp('[?&]'+encodeURIComponent(name)+'=([^&]*)')).exec(location.search))
+		  return decodeURIComponent(name[1]);
+	},
+	getCurrentSong: function() {
+		return this.songs[this.idx];
+	},
+	play: function() {
+		ScriptNodePlayer.getInstance().play();
+		this.autoplay= true;
+	},
+	pause: function() {
+		ScriptNodePlayer.getInstance().pause();
+		this.autoplay= false;
+	},
+	shuffle: function() {
+		this.idx= Math.round(Math.random()*(this.songs.length-1));
+	},
+	previous: function() {
+		if (this.isShuffleOn) 
+			this.shuffle();		
+		else if (this.idx == 0) 
+			this.idx= this.songs.length-1;
+		else
+			this.idx--;
+			
+		this.doOnPlayerReady();	
+	},
+	next: function() {
+		if (this.isShuffleOn) 
+			this.shuffle();		
+		else 
+			this.idx= (++this.idx) % this.songs.length;
+		
+		this.doOnPlayerReady();
+	},
+	doOnTrackEnd: function(){
+		this.next();
+	},
+	doOnTrackReadyToPlay: function(){
+		// this hook notifies you that a song has been successfully loaded and 
+		// it can now be played..
+		
+		// note: the infos provided below by getSongInfo() are backend specific, i.e.
+		// if you were to use something else instead of XMPBackendAdapter then 
+		// you should check what infos it provides..
+		var p= ScriptNodePlayer.getInstance();
+		var inf= p.getSongInfo();
+		var txt = document.createTextNode(inf.title+ " (" + inf.player +")");
+
+		// exercise 2: the below dependency to the "<span id=info>" is 
+		// undesirable. better get that code out of here.. (better put it into
+		// some callback function that you pass to the XMPPlayListPlayer from the
+		// outside..)
+		
+		var info = $( "#info" );
+		// 'textContent' is used below to ensure that no malicious HTML code 
+		// can be injected via the info
+		info.innerHTML= txt.textContent;
+		
+		if (this.autoplay) p.play();
+	},
+	doOnPlayerReady: function() {
+		// this hook notifies you that the player is ready.. you can now
+		// start loading/playing songs.. 
+		var p= ScriptNodePlayer.getInstance();		
+		var url = this.getCurrentSong();					
+		var options= {};	// may be used to specify 'timeout' or 'track' (backend specific)
+
+		p.loadMusicFromURL(url, options, 
+			(function(filename){ /* by default the loaded file would be played */
+			if (!this.autoplay) p.pause();}.bind(this)), 
+			(function(){}.bind(this)), (function(total, loaded){}));
+	}
+};
+
+// The construction of the XMPPlayListPlayer here automatically starts the loading 
+// of the playlist and its playback . (Alternatively you could achieve the same effect 
+// by triggering it from "<body onload="...">, etc - actually the above implmentation's
+// attempt to update the "info" <span> might fail due to the fact that the body may not
+// yet have been interpreted by the browser.. exercise 3: make it fool proof
+
+xmpPlay= new XMPPlayListPlayer(true);	// autoplay enabled
+
+</script>
+</head>
+
+<body>
+<!-- 
+Below some minimalistic HTML controls to show how the "xmpPlay" created in
+the HEAD script can be linked to some GUI. 
+
+exercise 4: setup some CSS styling to make the page look less ugly..
+exercise 5: add some toggle to let the user control the "shuffle" mode
+-->
+<button id="play" onclick="xmpPlay.play();"> &gt;</button>
+<button id="pause" onclick="xmpPlay.pause();"> ||</button>
+<button id="previous" onclick="xmpPlay.previous();"> |&lt;&lt;</button>
+<button id="next" onclick="xmpPlay.next();"> &gt;&gt;|</button>
+<input id="volume" onchange="ScriptNodePlayer.getInstance().setVolume(this.value/100);" type="range" min="0" max="100" value="100">
+
+<span id=info></span>
+
+ </div>
+</body>
+</html>
