@@ -1,12 +1,9 @@
 # web-examples
-Just a collection of little Web related examples and utilites (see sub-folders for
-additional information):
 
-- resource_compression: hack to compress arbitrary resource files that you load from JavaScript
+I've had enough of these Microsoft morons and I am no longer maintaining
+my repositories on github.
 
-- soundcloud:	howto play music from soundcloud.com
-
-- XMP_player: 	howto play music with my XMP player (or any of my other emulators)
-		and automatically generate respective playlists  
+This project can now be found here:
 
 
+https://bitbucket.org/wothke/web-examples
